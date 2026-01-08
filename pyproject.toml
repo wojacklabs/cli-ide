@@ -1,0 +1,17 @@
+[project]
+name = "cli-ide"
+version = "0.1.0"
+description = "Terminal-based IDE with file explorer, code editor, and terminal"
+requires-python = ">=3.11"
+dependencies = [
+    "textual>=0.89.0",
+    "tree-sitter>=0.23.0",
+    "tree-sitter-languages>=1.10.0",
+]
+
+[project.scripts]
+cli-ide = "cli_ide.app:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
