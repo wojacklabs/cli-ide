@@ -2,3 +2,8 @@ venv/
 .venv/
 __pycache__/
 *.pyc
+.coverage
+*.egg-info/
+dist/
+build/
+.pytest_cache/

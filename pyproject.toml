@@ -2,12 +2,41 @@
 name = "cli-ide"
 version = "0.1.0"
 description = "Terminal-based IDE with file explorer, code editor, and terminal"
+readme = "README.md"
+license = {file = "LICENSE"}
 requires-python = ">=3.11"
+keywords = ["ide", "terminal", "tui", "editor", "textual"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Text Editors :: Integrated Development Environments (IDE)",
+    "Typing :: Typed",
+]
 dependencies = [
     "textual>=0.89.0",
     "tree-sitter>=0.23.0",
     "tree-sitter-languages>=1.10.0",
+    "pyte>=0.8.0",
 ]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.1.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/user/cli-ide"
+Repository = "https://github.com/user/cli-ide"
+Issues = "https://github.com/user/cli-ide/issues"
 
 [project.scripts]
 cli-ide = "cli_ide.app:main"
@@ -15,3 +44,11 @@ cli-ide = "cli_ide.app:main"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["cli_ide"]
+branch = true
