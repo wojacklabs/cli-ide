@@ -1,11 +1,9 @@
+// Wireframe Terrain - Synthwave/Tron style (High Quality)
 import * as THREE from 'three';
-import { FontLoader } from 'three/addons/loaders/FontLoader.js';
-import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
 
-// Scene setup
 const canvas = document.getElementById('bg');
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
 
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -13,206 +11,303 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
 // Mouse tracking
 const mouse = { x: 0, y: 0, targetX: 0, targetY: 0 };
-
 document.addEventListener('mousemove', (e) => {
     mouse.targetX = (e.clientX / window.innerWidth) * 2 - 1;
     mouse.targetY = -(e.clientY / window.innerHeight) * 2 + 1;
 });
 
-// Liquid text shader
-const vertexShader = `
+// Colors
+const colors = {
+    bg: '#0a0a12',
+    grid: '#64ffda',
+    gridDim: '#1a3a4a',
+    sun1: '#ff2a6d',
+    sun2: '#d946ef',
+    sun3: '#05d9e8',
+    glow: '#64ffda',
+};
+
+// Terrain shader
+const terrainVertexShader = `
     uniform float uTime;
     uniform float uMouseX;
-    uniform float uMouseY;
 
     varying vec2 vUv;
-    varying vec3 vPosition;
+    varying float vElevation;
+    varying float vDistanceFromCenter;
 
-    // Simplex noise
+    // Simplex noise functions
     vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
-    vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
-    vec4 permute(vec4 x) { return mod289(((x*34.0)+1.0)*x); }
-    vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
+    vec2 mod289(vec2 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+    vec3 permute(vec3 x) { return mod289(((x*34.0)+1.0)*x); }
 
-    float snoise(vec3 v) {
-        const vec2 C = vec2(1.0/6.0, 1.0/3.0);
-        const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
-
-        vec3 i  = floor(v + dot(v, C.yyy));
-        vec3 x0 = v - i + dot(i, C.xxx);
-
-        vec3 g = step(x0.yzx, x0.xyz);
-        vec3 l = 1.0 - g;
-        vec3 i1 = min(g.xyz, l.zxy);
-        vec3 i2 = max(g.xyz, l.zxy);
-
-        vec3 x1 = x0 - i1 + C.xxx;
-        vec3 x2 = x0 - i2 + C.yyy;
-        vec3 x3 = x0 - D.yyy;
-
+    float snoise(vec2 v) {
+        const vec4 C = vec4(0.211324865405187, 0.366025403784439,
+                           -0.577350269189626, 0.024390243902439);
+        vec2 i  = floor(v + dot(v, C.yy));
+        vec2 x0 = v -   i + dot(i, C.xx);
+        vec2 i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+        vec4 x12 = x0.xyxy + C.xxzz;
+        x12.xy -= i1;
         i = mod289(i);
-        vec4 p = permute(permute(permute(
-            i.z + vec4(0.0, i1.z, i2.z, 1.0))
-            + i.y + vec4(0.0, i1.y, i2.y, 1.0))
-            + i.x + vec4(0.0, i1.x, i2.x, 1.0));
-
-        float n_ = 1.0/7.0;
-        vec3 ns = n_ * D.wyz - D.xzx;
-        vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
-        vec4 x_ = floor(j * ns.z);
-        vec4 y_ = floor(j - 7.0 * x_);
-        vec4 x = x_ * ns.x + ns.yyyy;
-        vec4 y = y_ * ns.x + ns.yyyy;
-        vec4 h = 1.0 - abs(x) - abs(y);
-        vec4 b0 = vec4(x.xy, y.xy);
-        vec4 b1 = vec4(x.zw, y.zw);
-        vec4 s0 = floor(b0)*2.0 + 1.0;
-        vec4 s1 = floor(b1)*2.0 + 1.0;
-        vec4 sh = -step(h, vec4(0.0));
-        vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy;
-        vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww;
-        vec3 p0 = vec3(a0.xy, h.x);
-        vec3 p1 = vec3(a0.zw, h.y);
-        vec3 p2 = vec3(a1.xy, h.z);
-        vec3 p3 = vec3(a1.zw, h.w);
-        vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2,p2), dot(p3,p3)));
-        p0 *= norm.x; p1 *= norm.y; p2 *= norm.z; p3 *= norm.w;
-        vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
-        m = m * m;
-        return 42.0 * dot(m*m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));
+        vec3 p = permute(permute(i.y + vec3(0.0, i1.y, 1.0)) + i.x + vec3(0.0, i1.x, 1.0));
+        vec3 m = max(0.5 - vec3(dot(x0,x0), dot(x12.xy,x12.xy), dot(x12.zw,x12.zw)), 0.0);
+        m = m*m;
+        m = m*m;
+        vec3 x = 2.0 * fract(p * C.www) - 1.0;
+        vec3 h = abs(x) - 0.5;
+        vec3 ox = floor(x + 0.5);
+        vec3 a0 = x - ox;
+        m *= 1.79284291400159 - 0.85373472095314 * (a0*a0 + h*h);
+        vec3 g;
+        g.x  = a0.x  * x0.x  + h.x  * x0.y;
+        g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+        return 130.0 * dot(m, g);
     }
 
     void main() {
         vUv = uv;
-        vPosition = position;
 
         vec3 pos = position;
 
-        // Liquid distortion based on position and time
-        float distortionX = snoise(vec3(pos.x * 0.5 + uTime * 0.3, pos.y * 0.5, pos.z * 0.5)) * 0.15;
-        float distortionY = snoise(vec3(pos.x * 0.5, pos.y * 0.5 + uTime * 0.25, pos.z * 0.5 + uTime * 0.1)) * 0.15;
-        float distortionZ = snoise(vec3(pos.x * 0.3 + uTime * 0.2, pos.y * 0.3, pos.z * 0.3)) * 0.1;
+        // Moving terrain - scrolling towards camera
+        float movingY = pos.y + uTime * 0.8;
 
-        // Mouse influence - stronger near mouse position
-        float mouseDistX = pos.x * 0.3 - uMouseX * 2.0;
-        float mouseDistY = pos.y * 0.3 - uMouseY * 2.0;
-        float mouseDist = sqrt(mouseDistX * mouseDistX + mouseDistY * mouseDistY);
-        float mouseInfluence = smoothstep(3.0, 0.0, mouseDist);
+        // Multi-octave noise for natural terrain
+        float elevation = 0.0;
+        elevation += snoise(vec2(pos.x * 0.15, movingY * 0.15)) * 2.0;
+        elevation += snoise(vec2(pos.x * 0.3, movingY * 0.3)) * 1.0;
+        elevation += snoise(vec2(pos.x * 0.6, movingY * 0.6)) * 0.5;
+        elevation += snoise(vec2(pos.x * 1.2, movingY * 1.2)) * 0.25;
 
-        // Apply extra distortion near mouse
-        distortionX += snoise(vec3(pos.x * 2.0 + uTime, pos.y * 2.0, uMouseX * 3.0)) * mouseInfluence * 0.3;
-        distortionY += snoise(vec3(pos.x * 2.0, pos.y * 2.0 + uTime, uMouseY * 3.0)) * mouseInfluence * 0.3;
+        // Mouse influence on terrain
+        float mouseWave = sin(pos.x * 2.0 + uMouseX * 3.0) * 0.3;
+        elevation += mouseWave * (1.0 - vUv.y);
 
-        pos.x += distortionX;
-        pos.y += distortionY;
-        pos.z += distortionZ;
+        // Smooth edges
+        float edgeFadeX = smoothstep(0.0, 0.15, vUv.x) * smoothstep(1.0, 0.85, vUv.x);
+        float edgeFadeY = smoothstep(0.0, 0.1, vUv.y);
+        elevation *= edgeFadeX * edgeFadeY;
+
+        // Distance from center for coloring
+        vDistanceFromCenter = abs(pos.x) / 10.0;
+
+        pos.z = elevation;
+        vElevation = elevation;
 
         gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
     }
 `;
 
-const fragmentShader = `
+const terrainFragmentShader = `
     uniform float uTime;
-    uniform vec3 uColor1;
-    uniform vec3 uColor2;
+    uniform vec3 uColorGrid;
+    uniform vec3 uColorDim;
 
     varying vec2 vUv;
-    varying vec3 vPosition;
+    varying float vElevation;
+    varying float vDistanceFromCenter;
 
     void main() {
-        // Gradient based on original position
-        float gradient = smoothstep(-2.0, 2.0, vPosition.x);
+        // Base color based on elevation
+        float elevationNorm = (vElevation + 2.0) / 6.0;
+        vec3 color = mix(uColorDim, uColorGrid, elevationNorm * 0.5);
 
-        // Add subtle time-based color shift
-        float shift = sin(uTime * 0.5 + vPosition.x * 0.5) * 0.1;
+        // Pulsing glow on higher elevations
+        float pulse = sin(uTime * 2.0 + vElevation * 2.0) * 0.5 + 0.5;
+        color += uColorGrid * pulse * elevationNorm * 0.3;
 
-        vec3 color = mix(uColor1, uColor2, gradient + shift);
+        // Grid line glow - thicker lines
+        float gridX = 1.0 - smoothstep(0.0, 0.06, abs(fract(vUv.x * 40.0) - 0.5) * 2.0);
+        float gridY = 1.0 - smoothstep(0.0, 0.06, abs(fract(vUv.y * 60.0) - 0.5) * 2.0);
+        float grid = max(gridX, gridY);
 
-        // Add subtle glow at edges
-        float edge = 1.0 - smoothstep(0.0, 0.1, abs(vPosition.z));
-        color += vec3(0.1, 0.2, 0.3) * edge * 0.5;
+        // Stronger grid near peaks
+        color += uColorGrid * grid * (0.2 + elevationNorm * 0.4);
+
+        // Distance fog / fade
+        float fog = smoothstep(1.0, 0.2, vUv.y);
+        color *= fog;
+
+        // Edge glow
+        float edgeGlow = (1.0 - vDistanceFromCenter) * 0.2;
+        color += uColorGrid * edgeGlow * fog;
 
         gl_FragColor = vec4(color, 1.0);
     }
 `;
 
-// Material
-const material = new THREE.ShaderMaterial({
-    vertexShader,
-    fragmentShader,
+// Create terrain
+const terrainGeometry = new THREE.PlaneGeometry(25, 30, 150, 200);
+const terrainMaterial = new THREE.ShaderMaterial({
     uniforms: {
         uTime: { value: 0 },
         uMouseX: { value: 0 },
-        uMouseY: { value: 0 },
-        uColor1: { value: new THREE.Color('#64ffda') },
-        uColor2: { value: new THREE.Color('#4a9eff') },
+        uColorGrid: { value: new THREE.Color(colors.grid) },
+        uColorDim: { value: new THREE.Color(colors.gridDim) },
     },
-    side: THREE.DoubleSide,
+    vertexShader: terrainVertexShader,
+    fragmentShader: terrainFragmentShader,
+    wireframe: true,
+    transparent: true,
 });
 
-// Load font and create text
-const fontLoader = new FontLoader();
-let textMesh = null;
+const terrain = new THREE.Mesh(terrainGeometry, terrainMaterial);
+terrain.rotation.x = -Math.PI * 0.5 + 0.4;
+terrain.position.y = -2.5;
+terrain.position.z = -5;
+scene.add(terrain);
 
-fontLoader.load(
-    'https://threejs.org/examples/fonts/helvetiker_bold.typeface.json',
-    (font) => {
-        const textGeometry = new TextGeometry('CLI-IDE', {
-            font: font,
-            size: 1,
-            height: 0.3,
-            curveSegments: 32,
-            bevelEnabled: true,
-            bevelThickness: 0.03,
-            bevelSize: 0.02,
-            bevelOffset: 0,
-            bevelSegments: 8,
-        });
+// Sun with gradient and scanlines
+const sunGeometry = new THREE.CircleGeometry(2.5, 64);
+const sunMaterial = new THREE.ShaderMaterial({
+    uniforms: {
+        uColor1: { value: new THREE.Color(colors.sun1) },
+        uColor2: { value: new THREE.Color(colors.sun2) },
+        uColor3: { value: new THREE.Color(colors.sun3) },
+        uTime: { value: 0 },
+    },
+    vertexShader: `
+        varying vec2 vUv;
+        void main() {
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+    `,
+    fragmentShader: `
+        uniform vec3 uColor1;
+        uniform vec3 uColor2;
+        uniform vec3 uColor3;
+        uniform float uTime;
+        varying vec2 vUv;
 
-        // Center the geometry
-        textGeometry.computeBoundingBox();
-        const centerOffset = new THREE.Vector3();
-        textGeometry.boundingBox.getCenter(centerOffset);
-        textGeometry.translate(-centerOffset.x, -centerOffset.y, -centerOffset.z);
+        void main() {
+            // Vertical gradient
+            vec3 color = mix(uColor1, uColor2, vUv.y);
+            color = mix(color, uColor3, smoothstep(0.7, 1.0, vUv.y));
 
-        textMesh = new THREE.Mesh(textGeometry, material);
-        scene.add(textMesh);
+            // Horizontal scanlines (bottom half only)
+            float scanline = step(0.5, fract(vUv.y * 20.0));
+            float scanMask = step(vUv.y, 0.5);
+            color = mix(color, color * 0.2, scanline * scanMask);
 
-        // Add wireframe overlay
-        const wireMaterial = new THREE.MeshBasicMaterial({
-            color: '#64ffda',
-            wireframe: true,
-            transparent: true,
-            opacity: 0.05,
-        });
-        const wireframe = new THREE.Mesh(textGeometry.clone(), wireMaterial);
-        textMesh.add(wireframe);
-    }
-);
+            // Soft edge
+            float dist = length(vUv - 0.5) * 2.0;
+            float alpha = 1.0 - smoothstep(0.9, 1.0, dist);
 
-// Add floating particles
-const particlesGeometry = new THREE.BufferGeometry();
-const particlesCount = 300;
-const posArray = new Float32Array(particlesCount * 3);
-
-for (let i = 0; i < particlesCount * 3; i++) {
-    posArray[i] = (Math.random() - 0.5) * 12;
-}
-
-particlesGeometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
-
-const particlesMaterial = new THREE.PointsMaterial({
-    size: 0.015,
-    color: '#64ffda',
+            gl_FragColor = vec4(color, alpha);
+        }
+    `,
     transparent: true,
-    opacity: 0.3,
+});
+
+const sun = new THREE.Mesh(sunGeometry, sunMaterial);
+sun.position.y = 2.5;
+sun.position.z = -15;
+scene.add(sun);
+
+// Sun glow
+const sunGlowGeometry = new THREE.CircleGeometry(4, 64);
+const sunGlowMaterial = new THREE.ShaderMaterial({
+    uniforms: {
+        uColor: { value: new THREE.Color(colors.sun1) },
+    },
+    vertexShader: `
+        varying vec2 vUv;
+        void main() {
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+    `,
+    fragmentShader: `
+        uniform vec3 uColor;
+        varying vec2 vUv;
+        void main() {
+            float dist = length(vUv - 0.5) * 2.0;
+            float alpha = smoothstep(1.0, 0.3, dist) * 0.3;
+            gl_FragColor = vec4(uColor, alpha);
+        }
+    `,
+    transparent: true,
     blending: THREE.AdditiveBlending,
 });
 
-const particles = new THREE.Points(particlesGeometry, particlesMaterial);
-scene.add(particles);
+const sunGlow = new THREE.Mesh(sunGlowGeometry, sunGlowMaterial);
+sunGlow.position.y = 2.5;
+sunGlow.position.z = -15.1;
+scene.add(sunGlow);
 
-camera.position.z = 5;
+// Horizon glow line
+const horizonGeometry = new THREE.PlaneGeometry(40, 0.1);
+const horizonMaterial = new THREE.MeshBasicMaterial({
+    color: colors.grid,
+    transparent: true,
+    opacity: 0.8,
+    blending: THREE.AdditiveBlending,
+});
+
+const horizon = new THREE.Mesh(horizonGeometry, horizonMaterial);
+horizon.position.y = -0.3;
+horizon.position.z = -10;
+scene.add(horizon);
+
+// Ambient particles (stars)
+const starsGeometry = new THREE.BufferGeometry();
+const starsCount = 300;
+const starsPositions = new Float32Array(starsCount * 3);
+const starsSizes = new Float32Array(starsCount);
+
+for (let i = 0; i < starsCount; i++) {
+    starsPositions[i * 3] = (Math.random() - 0.5) * 30;
+    starsPositions[i * 3 + 1] = Math.random() * 8 + 1;
+    starsPositions[i * 3 + 2] = -Math.random() * 15 - 5;
+    starsSizes[i] = Math.random() * 2 + 0.5;
+}
+
+starsGeometry.setAttribute('position', new THREE.BufferAttribute(starsPositions, 3));
+starsGeometry.setAttribute('size', new THREE.BufferAttribute(starsSizes, 1));
+
+const starsMaterial = new THREE.ShaderMaterial({
+    uniforms: {
+        uTime: { value: 0 },
+        uColor: { value: new THREE.Color('#ffffff') },
+    },
+    vertexShader: `
+        attribute float size;
+        uniform float uTime;
+        varying float vAlpha;
+
+        void main() {
+            vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+            gl_PointSize = size * (200.0 / -mvPosition.z);
+            gl_Position = projectionMatrix * mvPosition;
+
+            // Twinkle effect
+            vAlpha = 0.3 + 0.7 * (sin(uTime * 2.0 + position.x * 10.0) * 0.5 + 0.5);
+        }
+    `,
+    fragmentShader: `
+        uniform vec3 uColor;
+        varying float vAlpha;
+
+        void main() {
+            float dist = length(gl_PointCoord - 0.5) * 2.0;
+            float alpha = 1.0 - smoothstep(0.0, 1.0, dist);
+            gl_FragColor = vec4(uColor, alpha * vAlpha * 0.6);
+        }
+    `,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+});
+
+const stars = new THREE.Points(starsGeometry, starsMaterial);
+scene.add(stars);
+
+// Camera position
+camera.position.z = 6;
+camera.position.y = 1.5;
+camera.lookAt(0, 0, -5);
 
 // Animation
 function animate() {
@@ -225,18 +320,15 @@ function animate() {
     mouse.y += (mouse.targetY - mouse.y) * 0.05;
 
     // Update uniforms
-    material.uniforms.uTime.value = time;
-    material.uniforms.uMouseX.value = mouse.x;
-    material.uniforms.uMouseY.value = mouse.y;
+    terrainMaterial.uniforms.uTime.value = time;
+    terrainMaterial.uniforms.uMouseX.value = mouse.x;
+    sunMaterial.uniforms.uTime.value = time;
+    starsMaterial.uniforms.uTime.value = time;
 
-    // Subtle rotation based on mouse
-    if (textMesh) {
-        textMesh.rotation.x = mouse.y * 0.1;
-        textMesh.rotation.y = mouse.x * 0.1;
-    }
-
-    // Animate particles
-    particles.rotation.y = time * 0.02;
+    // Subtle camera movement
+    camera.position.x = mouse.x * 0.8;
+    camera.position.y = 1.5 + mouse.y * 0.3;
+    camera.lookAt(0, 0, -5);
 
     renderer.render(scene, camera);
 }
