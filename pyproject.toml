@@ -5,6 +5,9 @@ description = "Terminal-based IDE with file explorer, code editor, and terminal"
 readme = "README.md"
 license = {file = "LICENSE"}
 requires-python = ">=3.11"
+authors = [
+    {name = "wojacklabs", email = "wojacklabs@users.noreply.github.com"}
+]
 keywords = ["ide", "terminal", "tui", "editor", "textual"]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -34,9 +37,9 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/user/cli-ide"
-Repository = "https://github.com/user/cli-ide"
-Issues = "https://github.com/user/cli-ide/issues"
+Homepage = "https://cli-ide.vercel.app"
+Repository = "https://github.com/wojacklabs/cli-ide"
+Issues = "https://github.com/wojacklabs/cli-ide/issues"
 
 [project.scripts]
 cli-ide = "cli_ide.app:main"
