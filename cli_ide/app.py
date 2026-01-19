@@ -262,11 +262,12 @@ class CliIdeApp(App):
         Binding("alt+7", "goto_tab_7", "Tab 7", show=False),
         Binding("alt+8", "goto_tab_8", "Tab 8", show=False),
         Binding("alt+9", "goto_tab_9", "Tab 9", show=False),
-        # Split operations - move file to split pane (creates split if needed)
-        Binding("ctrl+shift+left", "move_file_left", "Move Left", priority=True),
-        Binding("ctrl+shift+right", "move_file_right", "Move Right", priority=True),
-        Binding("ctrl+shift+up", "move_file_up", "Move Up", priority=True),
-        Binding("ctrl+shift+down", "move_file_down", "Move Down", priority=True),
+        # Split operations - creates split or moves between panes
+        # macOS: Option+Arrow (Option key = super in Textual)
+        Binding("super+left", "move_file_left", "Focus Left", priority=True),
+        Binding("super+right", "move_file_right", "Split Right", priority=True),
+        Binding("super+up", "move_file_up", "Split Up", priority=True),
+        Binding("super+down", "move_file_down", "Split Down", priority=True),
         # Search operations
         Binding("ctrl+f", "find_in_file", "Find", priority=True),
         Binding("ctrl+g", "find_in_project", "Find All", priority=True),
@@ -672,12 +673,7 @@ class CliIdeApp(App):
             direction: "left", "right", "up", or "down"
         """
         pane = self.editor_state.active_pane
-        if not pane or not pane.active_file:
-            self.notify("No file to move", severity="warning")
-            return
-
-        open_file = pane.open_files.get(pane.active_file)
-        if not open_file:
+        if not pane:
             return
 
         split_container = self.query_one(SplitContainer)
@@ -718,19 +714,31 @@ class CliIdeApp(App):
 
         if direction in ("left", "up"):
             # Move to first pane (left/top)
-            if current_is_first:
-                # Already in first pane, nothing to do
-                return
             target_pane_id = pane_ids[0]
+            if current_is_first:
+                # Already in first pane, just activate it if no file to move
+                if not pane.active_file:
+                    return
         else:
             # Move to second pane (right/bottom)
-            if not current_is_first:
-                # Already in second pane, nothing to do
-                return
             target_pane_id = pane_ids[1]
+            if not current_is_first:
+                # Already in second pane, just activate it if no file to move
+                if not pane.active_file:
+                    return
 
         target_pane = self.editor_state.get_pane_by_id(target_pane_id)
         if not target_pane:
+            return
+
+        # If no active file, just switch to the target pane
+        if not pane.active_file:
+            self.editor_state.active_pane_id = target_pane_id
+            self._update_active_pane_style()
+            return
+
+        open_file = pane.open_files.get(pane.active_file)
+        if not open_file:
             return
 
         # Close tab in current pane

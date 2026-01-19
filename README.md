@@ -71,10 +71,10 @@ python -m cli_ide.app /path/to/project
 ### Split View
 | Key | Action |
 |-----|--------|
-| `Ctrl+Shift+Left` | Move file to left pane |
-| `Ctrl+Shift+Right` | Move file to right pane |
-| `Ctrl+Shift+Up` | Move file to top pane |
-| `Ctrl+Shift+Down` | Move file to bottom pane |
+| `Option+Left` | Focus left pane |
+| `Option+Right` | Split right / focus right pane |
+| `Option+Up` | Split up / focus top pane |
+| `Option+Down` | Split down / focus bottom pane |
 
 ### Search
 | Key | Action |

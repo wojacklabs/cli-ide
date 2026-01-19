@@ -8,6 +8,7 @@ from typing import Optional
 
 from textual import events
 from textual.app import ComposeResult
+from textual.binding import Binding
 from textual.containers import Container
 from textual.message import Message
 from textual.widgets import Static, TabbedContent, TabPane, TextArea
@@ -16,6 +17,22 @@ from ..models import MultiSelectState
 from ..themes import LIGHT_THEME
 from ..utils import path_to_tab_id
 from .search import SearchBar
+
+
+class CodeEditor(TextArea):
+    """Custom TextArea that doesn't capture app-level keybindings."""
+
+    # Keys that should be passed to the app instead of handled by the editor
+    PASSTHROUGH_KEYS = {
+        "super+left", "super+right", "super+up", "super+down",
+        "ctrl+w", "ctrl+f", "ctrl+g", "ctrl+d",
+    }
+
+    def _on_key(self, event: events.Key) -> None:
+        """Handle key events, passing some through to the app."""
+        if event.key in self.PASSTHROUGH_KEYS:
+            return
+        super()._on_key(event)
 
 
 class EditorPaneWidget(Container):
@@ -48,6 +65,8 @@ class EditorPaneWidget(Container):
         def __init__(self, pane_id: str):
             super().__init__()
             self.pane_id = pane_id
+
+    can_focus = True  # Allow clicking on empty pane to focus it
 
     def __init__(self, pane_id: str | None = None, **kwargs):
         pane_id = pane_id or str(uuid.uuid4())[:8]
@@ -165,7 +184,7 @@ class EditorPaneWidget(Container):
                 return
 
         # Create new tab with editor
-        editor = TextArea(
+        editor = CodeEditor(
             content,
             id=f"editor-{tab_id}",
             show_line_numbers=True,
@@ -226,13 +245,13 @@ class EditorPaneWidget(Container):
         tabs = self.query_one(f"#tabs-{self.pane_id}", TabbedContent)
         return tabs.active if tabs.active else None
 
-    def get_active_editor(self) -> Optional[TextArea]:
+    def get_active_editor(self) -> Optional[CodeEditor]:
         """Get currently active editor."""
         tabs = self.query_one(f"#tabs-{self.pane_id}", TabbedContent)
         active_pane = tabs.active_pane
         if active_pane:
             try:
-                return active_pane.query_one(TextArea)
+                return active_pane.query_one(CodeEditor)
             except Exception:
                 return None
         return None
