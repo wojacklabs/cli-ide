@@ -7,13 +7,32 @@ import subprocess
 from pathlib import Path
 
 from rich.text import Text
-from textual import events
+from textual import events, on
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical, VerticalScroll
 from textual.message import Message
 from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, Static
+
+
+class SearchInput(Input):
+    """Custom Input that notifies parent on Enter key."""
+
+    class EnterPressed(Message):
+        """Message when Enter is pressed."""
+
+        def __init__(self, value: str):
+            super().__init__()
+            self.value = value
+
+    async def _on_key(self, event: events.Key) -> None:
+        if event.key == "enter":
+            self.post_message(self.EnterPressed(self.value))
+            event.stop()
+            event.prevent_default()
+        else:
+            await super()._on_key(event)
 
 
 class SearchBar(Container):
@@ -36,7 +55,7 @@ class SearchBar(Container):
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="search-bar-content"):
-            yield Input(id="search-input", placeholder="Find...")
+            yield SearchInput(id="search-input", placeholder="Find...")
             yield Button("↑", id="find-prev", classes="search-btn")
             yield Button("↓", id="find-next", classes="search-btn")
             yield Button("✕", id="close-search", classes="search-btn")
@@ -44,28 +63,28 @@ class SearchBar(Container):
 
     def focus_input(self) -> None:
         """Focus the search input."""
-        self.query_one("#search-input", Input).focus()
+        self.query_one("#search-input", SearchInput).focus()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "close-search":
             self.post_message(self.SearchClosed())
         elif event.button.id in ("find-next", "find-prev"):
-            query = self.query_one("#search-input", Input).value
+            query = self.query_one("#search-input", SearchInput).value
             if query:
                 direction = "next" if event.button.id == "find-next" else "prev"
                 self.post_message(self.SearchSubmitted(query, direction))
 
-    def on_input_submitted(self, event: Input.Submitted) -> None:
-        if event.input.id == "search-input":
-            query = event.value
-            if query:
-                self.post_message(self.SearchSubmitted(query, "next"))
+    def on_search_input_enter_pressed(self, event: SearchInput.EnterPressed) -> None:
+        """Handle Enter key in search input - find next match."""
+        if event.value:
+            self.post_message(self.SearchSubmitted(event.value, "next"))
 
-    def on_input_changed(self, event: Input.Changed) -> None:
-        if event.input.id == "search-input":
-            query = event.value
-            if query:
-                self.post_message(self.SearchSubmitted(query, "next"))
+    @on(Input.Changed, "#search-input")
+    def _on_search_changed(self, event: Input.Changed) -> None:
+        """Handle text change - find first match."""
+        query = event.value
+        if query:
+            self.post_message(self.SearchSubmitted(query, "first"))
 
     def on_key(self, event: events.Key) -> None:
         if event.key == "escape":
@@ -76,7 +95,7 @@ class SearchBar(Container):
         self.query_one("#search-status", Static).update(text)
 
     def set_query(self, text: str) -> None:
-        self.query_one("#search-input", Input).value = text
+        self.query_one("#search-input", SearchInput).value = text
         self.focus_input()
 
 
@@ -266,7 +285,7 @@ class ProjectSearchDialog(ModalScreen[str]):
         with Vertical(id="project-search-dialog"):
             with Horizontal(id="project-search-header"):
                 yield Label("Find in Project")
-                yield Input(
+                yield SearchInput(
                     id="project-search-input", placeholder="Enter search term..."
                 )
                 yield Button("Search", id="search-btn", variant="primary")
@@ -277,7 +296,11 @@ class ProjectSearchDialog(ModalScreen[str]):
                 yield Button("Close", id="close-project-search")
 
     def on_mount(self) -> None:
-        self.query_one("#project-search-input", Input).focus()
+        self.query_one("#project-search-input", SearchInput).focus()
+
+    def on_search_input_enter_pressed(self, event: SearchInput.EnterPressed) -> None:
+        """Handle Enter key in search input."""
+        asyncio.create_task(self._do_search())
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "close-project-search":
@@ -323,7 +346,7 @@ class ProjectSearchDialog(ModalScreen[str]):
             self.dismiss(f"{filepath}:{line_num}")
 
     async def _do_search(self) -> None:
-        search_text = self.query_one("#project-search-input", Input).value
+        search_text = self.query_one("#project-search-input", SearchInput).value
         if not search_text or len(search_text) < 2:
             self.query_one("#result-count", Static).update(
                 "Enter at least 2 characters"

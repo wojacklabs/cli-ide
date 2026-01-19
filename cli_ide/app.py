@@ -825,7 +825,9 @@ class CliIdeApp(App):
     def on_search_bar_search_submitted(self, event: SearchBar.SearchSubmitted) -> None:
         """Handle search from inline search bar."""
         self._last_search = event.query
-        self._find_text(event.query, reverse=(event.direction == "prev"))
+        from_start = event.direction == "first"
+        reverse = event.direction == "prev"
+        self._find_text(event.query, reverse=reverse, from_start=from_start)
 
     def on_search_bar_search_closed(self, event: SearchBar.SearchClosed) -> None:
         """Handle search bar close."""
@@ -837,7 +839,9 @@ class CliIdeApp(App):
             except Exception:
                 pass
 
-    def _find_text(self, search_text: str, reverse: bool = False) -> None:
+    def _find_text(
+        self, search_text: str, reverse: bool = False, from_start: bool = False
+    ) -> None:
         """Find text in current editor."""
         pane = self.editor_state.active_pane
         if not pane:
@@ -861,11 +865,15 @@ class CliIdeApp(App):
                 sum(len(lines[i]) + 1 for i in range(cursor_loc[0])) + cursor_loc[1]
             )
 
-            if reverse:
+            if from_start:
+                # Search from beginning (when typing)
+                pos = content.find(search_text)
+            elif reverse:
                 pos = content.rfind(search_text, 0, current_pos)
                 if pos == -1:
                     pos = content.rfind(search_text)
             else:
+                # Search from current position + 1 (when pressing Enter)
                 pos = content.find(search_text, current_pos + 1)
                 if pos == -1:
                     pos = content.find(search_text)
@@ -1048,6 +1056,16 @@ class CliIdeApp(App):
 
         # Clear multi-select after applying
         pane_widget.clear_multiselect()
+
+    def check_action(self, action: str, parameters: tuple) -> bool | None:
+        """Check if action should be enabled."""
+        from textual.widgets import Input
+
+        # Don't intercept Enter/Escape if focus is on an Input widget
+        if action in ("apply_multiselect", "cancel_multiselect"):
+            if isinstance(self.focused, Input):
+                return False
+        return True
 
     def action_apply_multiselect(self) -> None:
         """Apply multi-select changes (Enter key)."""
