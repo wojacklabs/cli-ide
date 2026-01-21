@@ -2,6 +2,12 @@
 
 Terminal-based IDE built with [Textual](https://textual.textualize.io/). Features a file explorer, tabbed code editor with syntax highlighting, and an integrated terminal.
 
+## Clip
+https://github.com/user-attachments/assets/790fdf6d-f4c3-4826-aaf2-50b9c304ce6d
+
+
+
+
 ## Features
 
 - File explorer with directory tree navigation
